@@ -85,18 +85,85 @@ class ContactManagerUI:
             # Create a new window to display details
             detail_window = tk.Toplevel(self.root)
             detail_window.title(f"Contact Details - {name}")
-            tk.Label(detail_window, text=f"Name: {name}", font=("Arial", 14)).pack(pady=5)
-            tk.Label(detail_window, text=f"Phones: {', '.join(phones) or 'None'}").pack(pady=5)
-            tk.Label(detail_window, text=f"Emails: {', '.join(emails) or 'None'}").pack(pady=5)
-            tk.Label(detail_window, text=f"Addresses: {', '.join(addresses) or 'None'}").pack(pady=5)
-            tk.Label(detail_window, text=f"Notes: {notes or 'None'}").pack(pady=5)
+            detail_window.geometry("500x400")  # Fixed size
+            detail_window.resizable(False, False)
 
+            fields = [
+                ("Name", name),
+                ("Phones", ", ".join(phones) if phones else "None"),
+                ("Emails", ", ".join(emails) if emails else "None"),
+                ("Addresses", ", ".join(addresses) if addresses else "None"),
+                ("Notes", notes or "None")
+            ]
+
+            for idx, (field_name, field_value) in enumerate(fields):
+                frame = tk.Frame(detail_window)
+                frame.pack(fill=tk.X, pady=5, padx=10)
+
+                # Field label
+                label = tk.Label(frame, text=f"{field_name}:", anchor="w", width=12)
+                label.pack(side=tk.LEFT)
+
+                # Field content
+                text_box = tk.Text(frame, height=2, width=30, wrap=tk.WORD)
+                text_box.insert(tk.END, field_value)
+                text_box.configure(state="disabled")  # Make it read-only
+                text_box.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+
+                # Edit button
+                edit_button = tk.Button(frame, text="Edit", command=lambda fn=field_name, fv=field_value: self.edit_field(contact_id, fn, fv))
+                edit_button.pack(side=tk.RIGHT, padx=5)
+
+            # Close button
             tk.Button(detail_window, text="Close", command=detail_window.destroy).pack(pady=10)
 
         except IndexError:
             messagebox.showwarning("Warning", "No contact selected!")
         except Exception as e:
             messagebox.showerror("Error", f"Could not display contact details: {e}")
+
+    def edit_field(self, contact_id, field_name, current_value):
+        """Edit a specific field of a contact."""
+        edit_window = tk.Toplevel(self.root)
+        edit_window.title(f"Edit {field_name}")
+        edit_window.geometry("400x200")
+        edit_window.resizable(False, False)
+
+        tk.Label(edit_window, text=f"Current {field_name}:").pack(pady=10)
+        current_value_label = tk.Label(edit_window, text=current_value, wraplength=350, justify="left", relief="sunken")
+        current_value_label.pack(fill=tk.X, padx=10, pady=5)
+
+        tk.Label(edit_window, text=f"New {field_name}:").pack(pady=10)
+        new_value_entry = tk.Entry(edit_window, width=50)
+        new_value_entry.pack(padx=10, pady=5)
+
+        def save_changes():
+            new_value = new_value_entry.get().strip()
+            if not new_value:
+                messagebox.showwarning("Warning", f"New {field_name} cannot be empty!")
+                return
+
+            # Update the database
+            try:
+                if field_name == "Name":
+                    self.manager.cursor.execute("UPDATE contacts SET name = ? WHERE id = ?", (new_value, contact_id))
+                elif field_name == "Phones":
+                    self.manager.cursor.execute("INSERT INTO phones (contact_id, phone) VALUES (?, ?)", (contact_id, new_value))
+                elif field_name == "Emails":
+                    self.manager.cursor.execute("INSERT INTO emails (contact_id, email) VALUES (?, ?)", (contact_id, new_value))
+                elif field_name == "Addresses":
+                    self.manager.cursor.execute("INSERT INTO addresses (contact_id, address) VALUES (?, ?)", (contact_id, new_value))
+                elif field_name == "Notes":
+                    self.manager.cursor.execute("UPDATE contacts SET notes = ? WHERE id = ?", (new_value, contact_id))
+                self.manager.conn.commit()
+                messagebox.showinfo("Success", f"{field_name} updated successfully!")
+                edit_window.destroy()
+                self.load_contacts()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not update {field_name}: {e}")
+
+        tk.Button(edit_window, text="Save", command=save_changes).pack(pady=10)
+        tk.Button(edit_window, text="Cancel", command=edit_window.destroy).pack(pady=10)
 
     def add_contact(self):
         """Add a new contact."""
